@@ -1,10 +1,12 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using MapzenGo.Helpers;
 using MapzenGo.Models.Factories;
 using MapzenGo.Models.Settings;
 using UnityEngine;
 using UnityEngine.UI;
+using System;
 
 namespace MapzenGo.Models
 {
@@ -21,10 +23,10 @@ namespace MapzenGo.Models
             Query = (geo) => geo["geometry"]["type"].str == "Point";
         }
 
-        public override void Create(Tile tile)
+        protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
         {
             if (!(tile.Data.HasField(XmlTag) && tile.Data[XmlTag].HasField("features")))
-                return;
+                yield break;
 
 
             var ql = tile.Data[XmlTag]["features"].list.Where(x => Query(x));
@@ -35,6 +37,9 @@ namespace MapzenGo.Models
                     entity.transform.SetParent(_container.transform, true);
                 }
             }
+
+            finished(true);
+            yield return null;
         }
 
         protected override IEnumerable<MonoBehaviour> Create(Tile tile, JSONObject geo)

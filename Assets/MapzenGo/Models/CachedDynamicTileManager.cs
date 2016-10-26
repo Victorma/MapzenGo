@@ -12,12 +12,5 @@ namespace MapzenGo.Models
     public class CachedDynamicTileManager : DynamicTileManager
     {
 
-
-
-
-        protected override void LoadTile(Vector2d tileTms, Tile tile)
-        {
-            
-        }
     }
 }

@@ -18,12 +18,13 @@ namespace MapzenGo.Models
         public string RelativeCachePath = "../CachedTileData/{0}/";
         protected string CacheFolderPath;
 
+        private List<Plugin> _plugins;
+
         protected readonly string _mapzenUrl = "http://tile.mapzen.com/mapzen/vector/v1/{0}/{1}/{2}/{3}.{4}?api_key={5}";
         [SerializeField]
         protected string _key = "vector-tiles-5sBcqh6"; //try getting your own key if this doesn't work
         protected string _mapzenLayers;
-        [SerializeField]
-        protected Material MapMaterial;
+
         protected readonly string _mapzenFormat = "json";
 
         void Start()
@@ -33,30 +34,19 @@ namespace MapzenGo.Models
 #else
             CacheFolderPath = Path.Combine(Application.dataPath, RelativeCachePath);
 #endif
-            CacheFolderPath = CacheFolderPath.Format(Zoom);
-            if (!Directory.Exists(CacheFolderPath))
-                Directory.CreateDirectory(CacheFolderPath);
-
-            if (MapMaterial == null)
-                MapMaterial = Resources.Load<Material>("Ground");
 
             InitFactories();
             InitLayers();
 
-            var v2 = GM.LatLonToMeters(Latitude, Longitude);
-            var tile = GM.MetersToTile(v2, Zoom);
+        }
 
-            TileHost = new GameObject("Tiles").transform;
-            TileHost.SetParent(transform, false);
-
-            Tiles = new Dictionary<Vector2d, Tile>();
-            CenterTms = tile;
-            CenterInMercator = GM.TileBounds(CenterTms, Zoom).Center;
-
-            LoadTiles(CenterTms, CenterInMercator);
-
-            var rect = GM.TileBounds(CenterTms, Zoom);
-            transform.localScale = Vector3.one * (float)(TileSize / rect.Width);
+        private void InitFactories()
+        {
+            _plugins = new List<Plugin>();
+            foreach (var plugin in GetComponentsInChildren<Plugin>())
+            {
+                _plugins.Add(plugin);
+            }
         }
 
         private void InitLayers()
@@ -70,26 +60,25 @@ namespace MapzenGo.Models
             _mapzenLayers = string.Join(",", layers.ToArray());
         }
 
-        private void InitFactories()
-        {
-            _plugins = new List<Plugin>();
-            foreach (var plugin in GetComponentsInChildren<Plugin>())
-            {
-                _plugins.Add(plugin);
-            }
-        }
+
 
         protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
         {
-            var url = string.Format(_mapzenUrl, _mapzenLayers, Zoom, tile.TileTms.x, tile.TileTms.y, _mapzenFormat, _key);
+            
+            var url = string.Format(_mapzenUrl, _mapzenLayers, tile.Zoom, tile.TileTms.x, tile.TileTms.y, _mapzenFormat, _key);
             //this is temporary (hopefully), cant just keep adding stuff to filenames
-            var tilePath = Path.Combine(CacheFolderPath, _mapzenLayers.Replace(',', '_') + "_" + tile.TileTms.x + "_" + tile.TileTms.y);
+
+            var zoomFolder = CacheFolderPath.Format(tile.Zoom);
+            if (!Directory.Exists(zoomFolder))
+                Directory.CreateDirectory(zoomFolder);
+
+            var tilePath = Path.Combine(zoomFolder, _mapzenLayers.Replace(',', '_') + "_" + tile.TileTms.x + "_" + tile.TileTms.y);
             if (File.Exists(tilePath))
             {
                 using (var r = new StreamReader(tilePath, Encoding.Default))
                 {
                     var mapData = r.ReadToEnd();
-                    ConstructTile(mapData, tile);
+                    ConstructTile(mapData, tile, finished);
                 }
             }
             else
