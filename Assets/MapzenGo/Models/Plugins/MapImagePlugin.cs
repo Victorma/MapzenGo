@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using MapzenGo.Models.Plugins;
 using UniRx;
@@ -27,9 +28,8 @@ namespace MapzenGo.Models.Plugins
             "https://stamen-tiles.a.ssl.fastly.net/watercolor/"
         };
 
-        public override void Create(Tile tile)
+        protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
         {
-            base.Create(tile);
 
             var go = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
             go.name = "map";
@@ -51,13 +51,16 @@ namespace MapzenGo.Models.Plugins
                         rend.material.mainTexture = new Texture2D(512, 512, TextureFormat.DXT5, false);
                         rend.material.color = new Color(1f, 1f, 1f, 1f);
                         success.LoadImageIntoTexture((Texture2D) rend.material.mainTexture);
+                        finished(true);
                     }
                 },
                 error =>
                 {
                     Debug.Log(error);
+                    finished(false);
                 });
 
+            yield return null;
         }
     }
 }

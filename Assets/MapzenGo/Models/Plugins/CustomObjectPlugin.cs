@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using MapzenGo.Helpers;
 using MapzenGo.Models;
@@ -16,10 +17,8 @@ namespace MapzenGo.Models.Plugins
             new Vector2d(40.728664, -74.032011),
         };
 
-        public override void Create(Tile tile)
+        protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
         {
-            base.Create(tile);
-
             foreach (var pos in _customObjects)
             {
                 var meters = GM.LatLonToMeters(pos.x, pos.y);
@@ -32,6 +31,9 @@ namespace MapzenGo.Models.Plugins
                     go.transform.SetParent(tile.transform, false);
                 }
             }
+
+            finished(true);
+            yield return null;
         }
     }
 }

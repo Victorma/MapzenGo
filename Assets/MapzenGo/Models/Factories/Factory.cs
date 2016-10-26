@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using MapzenGo.Models.Plugins;
@@ -20,14 +21,16 @@ namespace MapzenGo.Models.Factories
             Query = (geo) => true;
         }
 
-        public override void Create(Tile tile)
+        protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
         {
-            base.Create(tile);
 
             if (MergeMeshes)
             {
                 if (!tile.Data.HasField(XmlTag))
-                    return;
+                {
+                    finished(false);
+                    yield break;
+                }
 
                 var b = CreateLayer(tile, tile.Data[XmlTag]["features"].list);
                 if (b) //getting a weird error without this, no idea really
@@ -36,7 +39,10 @@ namespace MapzenGo.Models.Factories
             else
             {
                 if (!(tile.Data.HasField(XmlTag) && tile.Data[XmlTag].HasField("features")))
-                    return;
+                {
+                    finished(false);
+                    yield break;
+                }
 
                 foreach (var entity in tile.Data[XmlTag]["features"].list.Where(x => Query(x)).SelectMany(geo => Create(tile, geo)))
                 {
@@ -46,6 +52,8 @@ namespace MapzenGo.Models.Factories
                     }
                 }
             }
+
+            finished(true);
         }
 
         protected virtual IEnumerable<MonoBehaviour> Create(Tile tile, JSONObject geo)

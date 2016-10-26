@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using MapzenGo.Helpers;
@@ -11,6 +12,7 @@ using UniRx.Triggers;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 using Random = UnityEngine.Random;
+using MapzenGo.Models.Plugins;
 
 namespace MapzenGo.Models.Factories
 {
@@ -20,7 +22,15 @@ namespace MapzenGo.Models.Factories
         public override string XmlTag { get { return "buildings"; } }
         private HashSet<string> _active = new HashSet<string>();
         [SerializeField] protected BuildingFactorySettings FactorySettings;
-        private TriangleNet.Mesh _mesh; 
+        private TriangleNet.Mesh _mesh;
+
+        public override List<Plugin> Dependencies
+        {
+            get
+            {
+                return new List<Plugin> { FindObjectOfType<VectorDataPlugin>() };
+            }
+        }
 
         public override void Start()
         {
