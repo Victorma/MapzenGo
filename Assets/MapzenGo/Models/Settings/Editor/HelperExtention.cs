@@ -49,6 +49,7 @@ namespace MapzenGo.Models.Settings.Editor
             }
             return scriptebleObject;
         }
+
 #endif
 
         public static Type[] CreateScriptableObject(Type TypeSeach)

@@ -187,22 +187,28 @@ namespace MapzenGo.Models
             if (!tile)
                 return;
 
+            var pluginsToStart = new List<Plugin>();
             foreach (var plugin in todo)
             {
                 if (doing.Contains(plugin)) continue;
                 // Check dependencies
-                if (plugin.Dependencies.All(dependencie => todo.Contains(dependencie)))
+                if (plugin.Dependencies.All(dependencie => !todo.Contains(dependencie)))
                 {
-                    doing.Add(plugin);
-                    plugin.Create(tile, success =>
-                    {
-                        todo.Remove(plugin);
-                        doing.Remove(plugin);
-
-                        if (success)
-                            ContinuePlugins(tile, todo, doing);
-                    });
+                    pluginsToStart.Add(plugin);
                 }
+            }
+
+            foreach(var toStart in pluginsToStart)
+            {
+                doing.Add(toStart);
+                toStart.Create(tile, (pluginDone, success) =>
+                {
+                    todo.Remove(pluginDone);
+                    doing.Remove(pluginDone);
+
+                    if (success)
+                        ContinuePlugins(tile, todo, doing);
+                });
             }
         }
 

@@ -7,6 +7,7 @@ using MapzenGo.Models.Enums;
 using MapzenGo.Models.Settings;
 using UniRx;
 using UnityEngine;
+using MapzenGo.Models.Plugins;
 
 namespace MapzenGo.Models.Factories
 {
@@ -14,6 +15,14 @@ namespace MapzenGo.Models.Factories
     {
         public override string XmlTag { get { return "roads"; } }
         [SerializeField] protected RoadFactorySettings FactorySettings;
+
+        public override List<Plugin> Dependencies
+        {
+            get
+            {
+                return new List<Plugin> { FindObjectOfType<VectorDataPlugin>() };
+            }
+        }
 
         public override void Start()
         {

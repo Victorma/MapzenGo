@@ -8,6 +8,7 @@ using TriangleNet;
 using TriangleNet.Geometry;
 using UniRx;
 using UnityEngine;
+using MapzenGo.Models.Plugins;
 
 namespace MapzenGo.Models.Factories
 {
@@ -16,6 +17,15 @@ namespace MapzenGo.Models.Factories
         public override string XmlTag { get { return "earth"; } }
         [SerializeField]
         protected EarthFactorySettings FactorySettings;
+
+        public override List<Plugin> Dependencies
+        {
+            get
+            {
+                return new List<Plugin> { FindObjectOfType<VectorDataPlugin>() };
+            }
+        }
+
         public override void Start()
         {
             base.Start();

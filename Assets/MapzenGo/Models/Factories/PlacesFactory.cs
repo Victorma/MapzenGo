@@ -7,6 +7,7 @@ using MapzenGo.Models.Settings;
 using UnityEngine;
 using UnityEngine.UI;
 using System;
+using MapzenGo.Models.Plugins;
 
 namespace MapzenGo.Models
 {
@@ -17,6 +18,15 @@ namespace MapzenGo.Models
         public override string XmlTag { get { return "places"; } }
         [SerializeField]
         protected PlacesFactorySettings FactorySettings;
+
+        public override List<Plugin> Dependencies
+        {
+            get
+            {
+                return new List<Plugin> { FindObjectOfType<VectorDataPlugin>() };
+            }
+        }
+
         public override void Start()
         {
             base.Start();

@@ -19,9 +19,9 @@ namespace MapzenGo.Models.Plugins
             }
         }
 
-        public virtual void Create(Tile tile, Action<bool> finished)
+        public virtual void Create(Tile tile, Action<Plugin, bool> finished)
         {
-            StartCoroutine(CreateRoutine(tile, finished));
+            StartCoroutine(CreateRoutine(tile, success => finished(this, success)));
         }
 
         protected virtual IEnumerator CreateRoutine(Tile tile, Action<bool> finished)

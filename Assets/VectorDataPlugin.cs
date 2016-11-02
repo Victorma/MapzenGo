@@ -64,7 +64,6 @@ namespace MapzenGo.Models
 
         protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
         {
-            
             var url = string.Format(_mapzenUrl, _mapzenLayers, tile.Zoom, tile.TileTms.x, tile.TileTms.y, _mapzenFormat, _key);
             //this is temporary (hopefully), cant just keep adding stuff to filenames
 
@@ -104,12 +103,12 @@ namespace MapzenGo.Models
         protected void ConstructTile(string text, Tile tile, Action<bool> finished)
         {
             var heavyMethod = Observable.Start(() => new JSONObject(text));
-
+            
             heavyMethod.ObserveOnMainThread().Subscribe(mapData =>
             {
                 if (tile) // checks if tile still exists and haven't destroyed yet
                     tile.Data = mapData;
-
+                
                 finished(true);
             });
         }
