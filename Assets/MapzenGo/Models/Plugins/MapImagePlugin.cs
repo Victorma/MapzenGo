@@ -1,66 +1,46 @@
 ﻿using System;
 using System.Collections;
-using System.Collections.Generic;
 using MapzenGo.Models.Plugins;
-using UniRx;
 using UnityEngine;
+using MapzenGo.Models;
 
-namespace MapzenGo.Models.Plugins
+public class MapImagePlugin : Plugin
 {
-    public class MapImagePlugin : Plugin
+
+    public TileServices TileService = TileServices.Default;
+
+    protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
     {
-        public enum TileServices
+
+        var go = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
+        go.name = "map";
+        go.SetParent(tile.transform, true);
+        go.localScale = new Vector3((float)tile.Rect.Width, (float)tile.Rect.Width, 1);
+        go.rotation = Quaternion.AngleAxis(90, new Vector3(1, 0, 0));
+        go.localPosition = Vector3.zero;
+        go.localPosition -= new Vector3(0, 1, 0);
+        var rend = go.GetComponent<Renderer>();
+        rend.material = tile.Material;
+
+        TileProvider.GetTile(new Vector3d(tile.TileTms.x, tile.TileTms.y, tile.Zoom), (texture) =>
         {
-            Default,
-            Satellite,
-            Terrain,
-            Toner,
-            Watercolor
-        }
-
-        public TileServices TileService = TileServices.Default;
-
-        private string[] TileServiceUrls = new string[] {
-            "http://b.tile.openstreetmap.org/",
-            "http://b.tile.openstreetmap.us/usgs_large_scale/",
-            "http://tile.stamen.com/terrain-background/",
-            "http://a.tile.stamen.com/toner/",
-            "https://stamen-tiles.a.ssl.fastly.net/watercolor/"
-        };
-
-        protected override IEnumerator CreateRoutine(Tile tile, Action<bool> finished)
-        {
-
-            var go = GameObject.CreatePrimitive(PrimitiveType.Quad).transform;
-            go.name = "map";
-            go.SetParent(tile.transform, true);
-            go.localScale = new Vector3((float)tile.Rect.Width, (float)tile.Rect.Width, 1);
-            go.rotation = Quaternion.AngleAxis(90, new Vector3(1, 0, 0));
-            go.localPosition = Vector3.zero;
-            go.localPosition -= new Vector3(0, 1, 0);
-            var rend = go.GetComponent<Renderer>();
-            rend.material = tile.Material;
-
-            var url = TileServiceUrls[(int)TileService] + tile.Zoom + "/" + tile.TileTms.x + "/" + tile.TileTms.y + ".png";
-            
-            ObservableWWW.GetWWW(url).Subscribe(
-                success =>
+            if (texture)
+            {
+                if (rend)
                 {
-                    if (rend)
-                    {
-                        rend.material.mainTexture = new Texture2D(512, 512, TextureFormat.DXT5, false);
-                        rend.material.color = new Color(1f, 1f, 1f, 1f);
-                        success.LoadImageIntoTexture((Texture2D) rend.material.mainTexture);
-                        finished(true);
-                    }
-                },
-                error =>
-                {
-                    Debug.Log(error);
-                    finished(false);
-                });
+                    rend.material.mainTexture = texture;
+                    rend.material.color = new Color(1f, 1f, 1f, 1f);
+                    
+                    finished(true);
+                }
+            }
+            else
+            {
+                finished(false);
+            }
+        });
 
-            yield return null;
-        }
+        yield return null;
     }
 }
+

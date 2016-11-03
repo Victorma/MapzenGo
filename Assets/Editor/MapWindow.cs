@@ -25,8 +25,7 @@ public class MapWindow : EditorWindow {
             SearchPlace search = new GameObject("Searcher").AddComponent<SearchPlace>();
             window.place = search;
         }
-
-        window.tilecache = new Dictionary<Tile, Texture2D>();
+        
 
         window.Init();
         window.Show();
@@ -38,6 +37,7 @@ public class MapWindow : EditorWindow {
     private string lastSearch = "";
     private float timeSinceLastWrite;
     private DropDown addressDropdown;
+    private GUIMap map;
 
     void Init()
     { 
@@ -48,6 +48,8 @@ public class MapWindow : EditorWindow {
         place.DataStructure.dataChache.Clear();
 
         addressDropdown = new DropDown("Address");
+        map = new GUIMap();
+        map.Zoom = 16;
     }
 
     void OnGUI()
@@ -62,7 +64,12 @@ public class MapWindow : EditorWindow {
             timeSinceLastWrite = 0;
         }
 
+
         location = EditorGUILayout.Vector2Field("Location", location);
+        map.Center = location;
+
+        map.DrawMap(GUILayoutUtility.GetRect(position.width, 300));
+
 
         if (addressDropdown.LayoutEnd())
         {
@@ -103,6 +110,7 @@ public class MapWindow : EditorWindow {
             place.namePlace = address;
             place.SearchInMapzen();
             lastSearch = address;
+            
         }
     }
 
