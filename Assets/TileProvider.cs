@@ -59,7 +59,6 @@ public class TileProvider {
             tileCache = new Dictionary<Vector3d, TilePromise>();
 
         var url = TileServiceUrls[(int)TileService] + tileZoom.z + "/" + tileZoom.x + "/" + tileZoom.y + ".png";
-
         if (tileCache.ContainsKey(tileZoom))
         {
             callback(tileCache[tileZoom].Texture);
@@ -69,6 +68,7 @@ public class TileProvider {
         {
             TilePromise tp = new TilePromise();
             tp.TileZoom = tileZoom;
+            tileCache.Add(tileZoom, tp);
 
             ObservableWWW.GetWWW(url).Subscribe(
             success =>

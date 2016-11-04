@@ -4,6 +4,8 @@ using System.Collections;
 using System.Collections.Generic;
 using MapzenGo.Helpers.Search;
 using MapzenGo.Models.Settings.Editor;
+using MapzenGo.Helpers;
+using MapzenGo.Helpers.VectorD;
 
 public class MapWindow : EditorWindow {
 
@@ -49,7 +51,8 @@ public class MapWindow : EditorWindow {
 
         addressDropdown = new DropDown("Address");
         map = new GUIMap();
-        map.Zoom = 16;
+        map.Repaint += Repaint;
+        map.Zoom = 19;
     }
 
     void OnGUI()
@@ -64,12 +67,14 @@ public class MapWindow : EditorWindow {
             timeSinceLastWrite = 0;
         }
 
-
+        
         location = EditorGUILayout.Vector2Field("Location", location);
-        map.Center = location;
+        var lastRect = GUILayoutUtility.GetLastRect();
+        if(location != map.Center.ToVector2())
+            map.Center = new Vector2d(location.x, location.y);
 
-        map.DrawMap(GUILayoutUtility.GetRect(position.width, 300));
-
+        map.DrawMap(GUILayoutUtility.GetRect(position.width, position.height - lastRect.y - lastRect.height));
+        location = map.Center.ToVector2();
 
         if (addressDropdown.LayoutEnd())
         {
@@ -77,6 +82,17 @@ public class MapWindow : EditorWindow {
             foreach (var l in place.DataStructure.dataChache)
                 if (l.label == address)
                     location = l.coordinates;
+
+            var geometry = new GMLGeometry();
+            geometry.Type = GMLGeometry.GeometryType.Polygon;
+
+            var points = 5f;
+            var radius = 0.00005;
+            for(float i = 0; i<5; i++)
+                geometry.Points.Add(new Vector2d(location.x + radius*Mathf.Sin(i*2f*Mathf.PI/points)*1.33333f, location.y + radius * Mathf.Cos(i * 2f * Mathf.PI / points)));
+
+
+            map.Geometries.Add(geometry);
 
             place.DataStructure.dataChache.Clear();
             Repaint();
@@ -122,3 +138,16 @@ public class MapWindow : EditorWindow {
 
 }
     
+
+public class GMLGeometry {
+
+    public enum GeometryType { Point, LineString, Polygon }
+
+    public GMLGeometry()
+    {
+        Points = new List<Vector2d>();
+    }
+
+    public GeometryType Type { get; set; }
+    public List<Vector2d> Points { get; set; }
+}
