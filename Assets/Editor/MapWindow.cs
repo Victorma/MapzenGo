@@ -212,6 +212,7 @@ public class MapWindow : EditorWindow {
         if(GUI.Button(centerButtonRect.GUIAdapt(rect), "Center") && geo.Points.Count > 0)
         {
             location = geo.Points.Aggregate(new Vector2(), (p, n) => p + n.ToVector2()) / geo.Points.Count;
+            map.Center = location.ToVector2d();
         }
 
         if(GUI.Button(editButtonRect.GUIAdapt(rect), "Edit"))

@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using System.Collections;
+using System.Linq;
 using System.Collections.Generic;
 using MapzenGo.Helpers;
 using MapzenGo.Helpers.VectorD;
@@ -18,6 +19,7 @@ public class GUIMap
     public RepaintDelegate Repaint;
     public int Zoom { get { return zoom; } set { zoom = Mathf.Clamp(value, 0, 19); } }
     public List<GMLGeometry> Geometries { get; set; }
+    public GMLGeometry selectedGeometry;
     public Vector2d Center { get; set; }
 
     // private attributes
@@ -62,14 +64,43 @@ public class GUIMap
             case EventType.mouseDrag:
                 {
                     // MoveLatLon or center var 
-                    var centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), Zoom);
-                    Center = GM.MetersToLatLon(GM.PixelsToMeters(centerPixel + new Vector2d(-Event.current.delta.x, -Event.current.delta.y), Zoom));
-                    
-                    Event.current.Use();
+                    if (area.Contains(Event.current.mousePosition))
+                    {
+                        if (selectedGeometry != null)
+                        {
+                            var delta = new Vector2d(Event.current.delta.x, Event.current.delta.y);
+                            selectedGeometry.Points = PixelsToLatLon(LatLonToPixels(selectedGeometry.Points).ConvertAll(p => p + delta));
+                        }
+                        else
+                        {
+
+                            var centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), Zoom);
+                            Center = GM.MetersToLatLon(GM.PixelsToMeters(centerPixel + new Vector2d(-Event.current.delta.x, -Event.current.delta.y), Zoom));
+
+                        }
+                        Event.current.Use();
+                    }
                 }
                 break;
             case EventType.mouseDown:
                 {
+                    var centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), Zoom);
+                    selectedGeometry = Geometries.Find(g =>
+                    {
+                        List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points), centerPixel, area)
+                            .ConvertAll(p => p - Event.current.mousePosition.ToVector2d());
+                        var inside = false;
+                        for(int i = 0; i<points.Count-1; i++)
+                        {
+                            if (((points[i].y > 0) != (points[i + 1].y > 0))
+                            && ((points[i].y > 0) == (points[i].y * points[i + 1].x > points[i + 1].y * points[i].x)))
+                                inside = !inside;
+
+                        }
+
+                        return inside;
+                    });
+
                     return true;
                 }
                 break;
@@ -123,13 +154,12 @@ public class GUIMap
         var tile = GM.MetersToTile(v2, Zoom);
         var centerPixel = GM.MetersToPixels(v2, Zoom);
 
-        // pixel absolute to relative adition
-        Vector2 patr = -(centerPixel.ToVector2() - (area.size / 2f) - area.position);
+
 
         foreach(var g in Geometries)
         {
             // Convert from lat lon to pixel relative to the rect
-            List<Vector2> points = g.Points.ConvertAll(p => GM.MetersToPixels(GM.LatLonToMeters(p.y, p.x), Zoom).ToVector2() + patr);
+            List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points), centerPixel, area);
             if (points.Count == 0)
                 continue;
 
@@ -138,22 +168,22 @@ public class GUIMap
             switch (g.Type)
             {
                 case GMLGeometry.GeometryType.Point:
-                    DrawPoint(points[0]);
+                    DrawPoint(points[0].ToVector2());
                     break;
                 case GMLGeometry.GeometryType.LineString:
-                    DrawPolyLine(points.ToArray());
-                    points.ForEach(p => DrawPoint(p));
+                    DrawPolyLine(points.ConvertAll(p => p.ToVector2()).ToArray());
+                    points.ForEach(p => DrawPoint(p.ToVector2()));
                     break;
                 case GMLGeometry.GeometryType.Polygon:
                    
-                    DrawPolygon(points.ToArray());
+                    DrawPolygon(points.ConvertAll(p => p.ToVector2()).ToArray());
 
-                    var cicle = new List<Vector2>();
+                    var cicle = new List<Vector2d>();
                     cicle.AddRange(points);
                     cicle.Add(points[0]);
 
-                    DrawPolyLine(cicle.ToArray());
-                    points.ForEach(p => DrawPoint(p));
+                    DrawPolyLine(cicle.ConvertAll(p => p.ToVector2()).ToArray());
+                    points.ForEach(p => DrawPoint(p.ToVector2()));
                     break;
             }
 
@@ -189,6 +219,23 @@ public class GUIMap
         return l.ConvertAll(p => new Vector3(p.x, p.y, 0f)).ToArray();
     }
 
+    private List<Vector2d> LatLonToPixels(List<Vector2d> points)
+    {        
+        // pixel absolute to relative adition
+        return points.ConvertAll(p => GM.MetersToPixels(GM.LatLonToMeters(p.y, p.x), Zoom)); 
+    }
+
+    private List<Vector2d> PixelsToLatLon(List<Vector2d> points)
+    {
+        // pixel absolute to relative adition
+        return points.ConvertAll(p => GM.MetersToLatLon(GM.PixelsToMeters(p, Zoom)));
+    }
+
+    private List<Vector2d> PixelsToRelative(List<Vector2d> pixels, Vector2d center, Rect area)
+    {
+        Vector2d patr = -(center - (area.size / 2f).ToVector2d() - area.position.ToVector2d());
+        return pixels.ConvertAll(p => p + patr);
+    }
 }
 
 
