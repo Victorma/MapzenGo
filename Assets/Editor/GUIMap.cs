@@ -20,6 +20,7 @@ public class GUIMap
     public int Zoom { get { return zoom; } set { zoom = Mathf.Clamp(value, 0, 19); } }
     public List<GMLGeometry> Geometries { get; set; }
     public GMLGeometry selectedGeometry;
+    public double SelectPointDistance { get; set; }
     public Vector2d Center { get; set; }
 
     // private attributes
@@ -32,6 +33,7 @@ public class GUIMap
     public GUIMap()
     {
         Geometries = new List<GMLGeometry>();
+        SelectPointDistance = 15.0;
     }
 
     /* -----------------------------
@@ -40,6 +42,9 @@ public class GUIMap
 
     public bool DrawMap(Rect area)
     {
+        var mousePos = Event.current.mousePosition.ToVector2d();
+        var delta = new Vector2d(Event.current.delta.x, Event.current.delta.y);
+
         switch (Event.current.type)
         {
             case EventType.Repaint:
@@ -66,17 +71,23 @@ public class GUIMap
                     // MoveLatLon or center var 
                     if (area.Contains(Event.current.mousePosition))
                     {
+                        var centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), Zoom);
                         if (selectedGeometry != null)
                         {
-                            var delta = new Vector2d(Event.current.delta.x, Event.current.delta.y);
-                            selectedGeometry.Points = PixelsToLatLon(LatLonToPixels(selectedGeometry.Points).ConvertAll(p => p + delta));
+                            var pixels = LatLonToPixels(selectedGeometry.Points);
+
+                            // Find the closest point
+                            var point = PixelsToRelative(pixels, centerPixel, area)
+                                .FindIndex(p => (p - mousePos).magnitude < SelectPointDistance);
+                            // If there's a point, move the point
+                            if(point != -1) pixels[point] += delta;
+                            // Otherwise, move the pixel
+                            else pixels = pixels.ConvertAll(p => p + delta);
+                            selectedGeometry.Points = PixelsToLatLon(pixels);
                         }
                         else
                         {
-
-                            var centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), Zoom);
-                            Center = GM.MetersToLatLon(GM.PixelsToMeters(centerPixel + new Vector2d(-Event.current.delta.x, -Event.current.delta.y), Zoom));
-
+                            Center = GM.MetersToLatLon(GM.PixelsToMeters(centerPixel - delta, Zoom));
                         }
                         Event.current.Use();
                     }
@@ -89,16 +100,8 @@ public class GUIMap
                     {
                         List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points), centerPixel, area)
                             .ConvertAll(p => p - Event.current.mousePosition.ToVector2d());
-                        var inside = false;
-                        for(int i = 0; i<points.Count-1; i++)
-                        {
-                            if (((points[i].y > 0) != (points[i + 1].y > 0))
-                            && ((points[i].y > 0) == (points[i].y * points[i + 1].x > points[i + 1].y * points[i].x)))
-                                inside = !inside;
-
-                        }
-
-                        return inside;
+                        
+                        return Inside(mousePos, points) || points.Any(p => p.magnitude < SelectPointDistance); 
                     });
 
                     return true;
@@ -221,73 +224,35 @@ public class GUIMap
 
     private List<Vector2d> LatLonToPixels(List<Vector2d> points)
     {        
-        // pixel absolute to relative adition
         return points.ConvertAll(p => GM.MetersToPixels(GM.LatLonToMeters(p.y, p.x), Zoom)); 
     }
 
     private List<Vector2d> PixelsToLatLon(List<Vector2d> points)
     {
-        // pixel absolute to relative adition
         return points.ConvertAll(p => GM.MetersToLatLon(GM.PixelsToMeters(p, Zoom)));
     }
 
     private List<Vector2d> PixelsToRelative(List<Vector2d> pixels, Vector2d center, Rect area)
     {
+        // pixel absolute to relative adition
         Vector2d patr = -(center - (area.size / 2f).ToVector2d() - area.position.ToVector2d());
         return pixels.ConvertAll(p => p + patr);
     }
-}
 
-
-/* --------------------
- * Rect extension class
- * -------------------- */
-
-public static class ExtensionRect
-{
-    public static Rect Intersection(this Rect rect, Rect other)
+    private bool Inside(Vector2d pixel, List<Vector2d> polygon)
     {
-        Vector2 r0o = rect.position,
-            r0e = rect.position + rect.size,
-            r1o = other.position,
-            r1e = other.position + other.size;
-
-        return FromCorners(
-            new Vector2(Mathf.Max(r0o.x, r1o.x), Mathf.Max(r0o.y, r1o.y)), 
-            new Vector2(Mathf.Min(r0e.x, r1e.x), Mathf.Min(r0e.y, r1e.y)));
-
-    }
-
-    public static Rect ToTexCoords(this Rect rect, Rect slice)
-    {
-        return new Rect(
-            (slice.x - rect.x) / rect.width,
-            1f - (((slice.y + slice.height) - (rect.y + rect.height)) / rect.height),
-            slice.width / rect.width,
-            slice.height / rect.height
-            );
-    }
-
-    public static Rect FromCorners(Vector2 o, Vector2 e)
-    {
-        return new Rect(o, e - o);
-    }
-
-    public static Rect Move(this Rect target, Vector2 move)
-    {
-        Rect r = new Rect(move.x + target.x, move.y + target.y, target.width, target.height);
-
-        /*if (r.x + r.width > move.x + move.width)
+        var inside = false;
+        for (int i = 0; i < polygon.Count - 1; i++)
         {
-            r.width = (move.width + 25) - r.x;
-        }*/
+            if (((polygon[i].y > 0) != (polygon[i + 1].y > 0))
+            && ((polygon[i].y > 0) == (polygon[i].y * polygon[i + 1].x > polygon[i + 1].y * polygon[i].x)))
+                inside = !inside;
+        }
 
-        return new Rect(move.x + target.x, move.y + target.y, target.width, target.height);
-    }
-
-    public static Rect GUIAdapt(this Rect rect, Rect guiSpace)
-    {
-        return rect.Move(guiSpace.position).Intersection(guiSpace);
+        return inside;
     }
 }
+
+
+
 
