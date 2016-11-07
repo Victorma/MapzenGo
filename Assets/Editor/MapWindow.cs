@@ -1,20 +1,22 @@
 ﻿using UnityEngine;
 using UnityEditor;
 using System.Collections;
+using System.Linq;
 using System.Collections.Generic;
 using MapzenGo.Helpers.Search;
 using MapzenGo.Models.Settings.Editor;
 using MapzenGo.Helpers;
 using MapzenGo.Helpers.VectorD;
+using UnityEditorInternal;
 
 public class MapWindow : EditorWindow {
 
 
     const string PATH_SAVE_SCRIPTABLE_OBJECT = "Assets/MapzenGo/Resources/Settings/";
 
-
-
-    // Add menu named "My Window" to the Window menu
+    /* ----------------------------------------
+     * CREATE: static method for window creation
+     * ---------------------------------------- */
     [MenuItem("Window/Map Window")]
     static void Create()
     {
@@ -33,14 +35,28 @@ public class MapWindow : EditorWindow {
         window.Show();
     }
 
+    /* ---------------------------------
+     * Attributes
+     * -------------------------------- */
+
     private SearchPlace place;
     private string address = "";
     private Vector2 location;
     private string lastSearch = "";
     private float timeSinceLastWrite;
+    private List<GMLGeometry> geometries;
+
+    /* ----------------------------------
+     * GUI ELEMENTS
+     * -----------------------------------*/
     private DropDown addressDropdown;
     private GUIMap map;
+    private ReorderableList geometriesReorderableList;
 
+
+    /* ----------------------------------
+     * INIT: Used for late initialization after constructor
+     * ----------------------------------*/
     void Init()
     { 
         EditorApplication.update += this.Update;
@@ -53,8 +69,23 @@ public class MapWindow : EditorWindow {
         map = new GUIMap();
         map.Repaint += Repaint;
         map.Zoom = 19;
-    }
 
+        geometriesReorderableList = new ReorderableList(new ArrayList(), typeof(GMLGeometry), true, true, true, true);
+        geometriesReorderableList.drawHeaderCallback += DrawGMLGeometryHeader;
+        geometriesReorderableList.drawElementCallback += DrawGMLGeometry;
+        geometriesReorderableList.onAddCallback += AddGMLGeometry;
+        geometriesReorderableList.onRemoveCallback += RemoveGMLGeometry;
+        geometriesReorderableList.onReorderCallback += ReorderGMLGeometries;
+
+        // Creating the geometry list
+        geometries = new List<GMLGeometry>();
+        // Set geometries list reference
+        geometriesReorderableList.list = geometries;
+        map.Geometries = geometries;
+    }
+    /* ----------------------------------
+     * ON GUI: Used for drawing the window every unity event
+     * ----------------------------------*/
     void OnGUI()
     {
         if (addressDropdown == null)
@@ -68,16 +99,28 @@ public class MapWindow : EditorWindow {
         }
 
         
+        // Location control
         location = EditorGUILayout.Vector2Field("Location", location);
         var lastRect = GUILayoutUtility.GetLastRect();
         if(location != map.Center.ToVector2())
             map.Center = new Vector2d(location.x, location.y);
 
-        map.DrawMap(GUILayoutUtility.GetRect(position.width, position.height - lastRect.y - lastRect.height));
+        GUILayout.BeginHorizontal();
+        // Geometries control
+        var geometriesWidth = 150;
+        geometriesReorderableList.elementHeight = geometriesReorderableList.list.Count == 0 ? 20 : 70;
+        var rect = GUILayoutUtility.GetRect(geometriesWidth, position.height - lastRect.y - lastRect.height);
+        geometriesReorderableList.DoList(rect);
+
+        // Map drawing
+        map.DrawMap(GUILayoutUtility.GetRect(position.width - geometriesWidth, position.height - lastRect.y - lastRect.height));
         location = map.Center.ToVector2();
+
+        GUILayout.EndHorizontal();
 
         if (addressDropdown.LayoutEnd())
         {
+            // If new Location is selected from the dropdown
             lastSearch = address = addressDropdown.Value;
             foreach (var l in place.DataStructure.dataChache)
                 if (l.label == address)
@@ -92,13 +135,16 @@ public class MapWindow : EditorWindow {
                 geometry.Points.Add(new Vector2d(location.x + radius*Mathf.Sin(i*2f*Mathf.PI/points)*1.33333f, location.y + radius * Mathf.Cos(i * 2f * Mathf.PI / points)));
 
 
-            map.Geometries.Add(geometry);
+            geometries.Add(geometry);
 
             place.DataStructure.dataChache.Clear();
             Repaint();
         }
     }
 
+    /* ------------------------------------------
+     * Update: used for taking care of the http requests
+     * ------------------------------------------ */
     void Update()
     {
         //Debug.Log(Time.fixedDeltaTime);
@@ -118,7 +164,9 @@ public class MapWindow : EditorWindow {
         }
     }
 
-
+    /* ---------------------------------------
+     * PerformSearch: Used to control the start of searches
+     * --------------------------------------- */
     private void PerformSearch()
     {
         if (address != null && address.Trim() != "" && lastSearch != address)
@@ -126,14 +174,65 @@ public class MapWindow : EditorWindow {
             place.namePlace = address;
             place.SearchInMapzen();
             lastSearch = address;
-            
         }
     }
 
+
+    /* ------------------------------
+     * OnDestroy: Used to deregister and destroy events
+     * ------------------------------ */
     void OnDestroy()
     {
         EditorApplication.update -= this.Update;
 
+    }
+
+    /*----------------------------
+     * GML GEOMETRY OPERATIONS
+     *----------------------------*/
+
+    Rect typePopupRect    = new Rect(0, 2, 150, 15);
+    Rect infoRect         = new Rect(9, 20, 150, 15);
+    Rect centerButtonRect = new Rect(0, 40, 75, 15);
+    Rect editButtonRect   = new Rect(75, 40, 75, 15);
+
+    private void DrawGMLGeometryHeader(Rect rect)
+    {
+        GUI.Label(rect, "Geometries");
+    }
+
+    private void DrawGMLGeometry(Rect rect, int index, bool active, bool focused)
+    {
+        GMLGeometry geo = (GMLGeometry)geometriesReorderableList.list[index];
+
+        EditorGUI.LabelField(infoRect.GUIAdapt(rect), "Points: " + geo.Points.Count);
+
+        geo.Type = (GMLGeometry.GeometryType) EditorGUI.EnumPopup(typePopupRect.GUIAdapt(rect), geo.Type);
+
+        if(GUI.Button(centerButtonRect.GUIAdapt(rect), "Center") && geo.Points.Count > 0)
+        {
+            location = geo.Points.Aggregate(new Vector2(), (p, n) => p + n.ToVector2()) / geo.Points.Count;
+        }
+
+        if(GUI.Button(editButtonRect.GUIAdapt(rect), "Edit"))
+        {
+            // TODO set editing this
+        }
+    }
+
+    private void AddGMLGeometry(ReorderableList list)
+    {
+        geometries.Add(new GMLGeometry());
+    }
+
+    private void RemoveGMLGeometry(ReorderableList list)
+    {
+        geometries.RemoveAt(list.index);
+    }
+
+    private void ReorderGMLGeometries(ReorderableList list)
+    {
+        geometries = (List<GMLGeometry>)geometriesReorderableList.list;
     }
 
 }

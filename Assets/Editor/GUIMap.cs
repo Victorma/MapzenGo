@@ -94,7 +94,7 @@ public class GUIMap
             bottomRightCorner = GM.PixelsToTile(centerPixel + new Vector2d(area.width / 2f, area.height / 2f));
 
         // pixel absolute to relative adition
-        Vector2 patr = -(centerPixel.ToVector2() - (area.size / 2f));
+        Vector2 patr = -(centerPixel.ToVector2() - (area.size / 2f) - area.position);
 
         for (double x = topLeftCorner.x; x <= bottomRightCorner.x; x++)
         {
@@ -108,6 +108,8 @@ public class GUIMap
 
                 var windowRect = new Rect(tileRect.position + patr, tileRect.size);
                 var areaRect = windowRect.Intersection(area);
+                if (areaRect.width < 0 || areaRect.height < 0)
+                    continue;
 
                 GUI.DrawTextureWithTexCoords(areaRect, tp.Texture, windowRect.ToTexCoords(areaRect));
             }
@@ -122,13 +124,16 @@ public class GUIMap
         var centerPixel = GM.MetersToPixels(v2, Zoom);
 
         // pixel absolute to relative adition
-        Vector2 patr = -(centerPixel.ToVector2() - (area.size / 2f));
+        Vector2 patr = -(centerPixel.ToVector2() - (area.size / 2f) - area.position);
 
         foreach(var g in Geometries)
         {
             // Convert from lat lon to pixel relative to the rect
             List<Vector2> points = g.Points.ConvertAll(p => GM.MetersToPixels(GM.LatLonToMeters(p.y, p.x), Zoom).ToVector2() + patr);
-            
+            if (points.Count == 0)
+                continue;
+
+
             Handles.BeginGUI();
             switch (g.Type)
             {
@@ -219,6 +224,23 @@ public static class ExtensionRect
     public static Rect FromCorners(Vector2 o, Vector2 e)
     {
         return new Rect(o, e - o);
+    }
+
+    public static Rect Move(this Rect target, Vector2 move)
+    {
+        Rect r = new Rect(move.x + target.x, move.y + target.y, target.width, target.height);
+
+        /*if (r.x + r.width > move.x + move.width)
+        {
+            r.width = (move.width + 25) - r.x;
+        }*/
+
+        return new Rect(move.x + target.x, move.y + target.y, target.width, target.height);
+    }
+
+    public static Rect GUIAdapt(this Rect rect, Rect guiSpace)
+    {
+        return rect.Move(guiSpace.position).Intersection(guiSpace);
     }
 }
 
