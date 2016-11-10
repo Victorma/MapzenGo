@@ -42,6 +42,8 @@ public class GUIMap
     protected Vector2d centerPixel;
     private Vector2d PATR; // Will be calculated in the begining of each iteration
 
+    protected int selectedPoint;
+
     /* -----------------------------
      * Constructor
      *-----------------------------*/
@@ -74,6 +76,39 @@ public class GUIMap
 
                     // Draw the GeoShapes
                     DrawGeometries(area);
+
+                    if(selectedGeometry != null)
+                    {
+                        var pixels = PixelsToRelative(LatLonToPixels(selectedGeometry.Points)).ConvertAll(p => p.ToVector2());
+                        var v2mousepos = mousePos.ToVector2();
+                        // Find the closest index
+                        var min = pixels.Min(p => (p - v2mousepos).magnitude);
+                        var closest = pixels.FindIndex(p => (p - v2mousepos).magnitude == min);
+                        
+                        // Fix the previous and next
+                        var prev = closest == 0 ? pixels.Count - 1 : closest - 1;
+                        var next = (closest + 1) % pixels.Count;
+                        // Calculate the normal to both adjacent axis to closest point
+                        var c = pixels[closest];
+                        var v1 = (pixels[closest] - pixels[prev]).normalized;
+                        var v2 = (pixels[closest] - pixels[next]).normalized;
+
+                        var closestNormal = (v1 + v2).normalized;
+                        var convex = Vector3.Cross(v1, v2).z > 0;
+                            
+                        var mouseVector = (v2mousepos - c); 
+                        var left = Vector3.Cross(closestNormal, mouseVector).z > 0;
+                        Handles.DrawLine(pixels[closest], v2mousepos);
+                        if ((left && convex) || (!left && !convex))
+                        {
+                            Handles.DrawLine(pixels[prev], v2mousepos);
+                        }
+                        else
+                        {
+                            Handles.DrawLine(pixels[next], v2mousepos);
+                        }
+                        
+                    }
                 }
                 break;
 
@@ -96,12 +131,13 @@ public class GUIMap
                             var pixels = LatLonToPixels(selectedGeometry.Points);
 
                             // Find the closest point
-                            var point = PixelsToRelative(pixels)
-                                .FindIndex(p => (p - mousePos).magnitude < SelectPointDistance);
+                            /*var point = PixelsToRelative(pixels)
+                                .FindIndex(p => (p - mousePos).magnitude < SelectPointDistance);*/
                             // If there's a point, move the point
-                            if(point != -1) pixels[point] += delta;
+                            if (selectedPoint != -1) pixels[selectedPoint] += delta;
                             // Otherwise, move the pixel
                             else pixels = pixels.ConvertAll(p => p + delta);
+                            // Then update the points
                             selectedGeometry.Points = PixelsToLatLon(pixels);
                         }
                         else
@@ -118,8 +154,10 @@ public class GUIMap
                     {
                         List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points))
                             .ConvertAll(p => p - Event.current.mousePosition.ToVector2d());
-                        
-                        return Inside(mousePos, points) || points.Any(p => p.magnitude < SelectPointDistance); 
+
+                        selectedPoint = points.FindIndex(p => p.magnitude < SelectPointDistance);
+
+                        return Inside(mousePos, points) || selectedPoint != -1; 
                     });
 
                     if (area.Contains(Event.current.mousePosition))
@@ -222,8 +260,18 @@ public class GUIMap
 
     private void DrawPolygon(Vector2[] points)
     {
+        Triangulator2 tr = new Triangulator2(points);
         Handles.color = new Color(.2f,.2f,.9f,.5f);
-        Handles.DrawAAConvexPolygon(V2ToV3(points));
+        int[] indices = tr.Triangulate();
+        Vector3[] triangle = new Vector3[3];
+        var v3p = V2ToV3(points);
+        for (int i = 2; i<indices.Length; i+=3)
+        {
+            triangle[0] = v3p[indices[i-2]];
+            triangle[1] = v3p[indices[i-1]];
+            triangle[2] = v3p[indices[i]];
+            Handles.DrawAAConvexPolygon(triangle);
+        }
     }
 
     private Vector3[] V2ToV3(Vector2[] points)

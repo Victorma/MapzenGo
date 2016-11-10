@@ -122,28 +122,51 @@ public class MapWindow : EditorWindow {
             {
                 switch (editing.Type)
                 {
+                    case GMLGeometry.GeometryType.Point:
+                        if (editing.Points.Count == 1) editing.Points[0] = map.GeoMousePosition;
+                        else editing.Points.Add(map.GeoMousePosition);
+                        break;
+                    case GMLGeometry.GeometryType.LineString:
+                        editing.Points.Add(map.GeoMousePosition);
+                        break;
                     case GMLGeometry.GeometryType.Polygon:
-                        // Find the closest index
-                        var min = editing.Points.Min(p => (p - map.GeoMousePosition).magnitude);
-                        var closest = editing.Points.FindIndex(p => (p - map.GeoMousePosition).magnitude == min);
-                        // Fix the previous and next
-                        var prev = closest == 0 ? editing.Points.Count - 1 : closest - 1;
-                        var next = (closest + 1) % editing.Points.Count;
-                        // Calculate the normal to both adjacent axis to closest point
-                        var closestNormal = ((editing.Points[closest] - editing.Points[prev]).normalized
-                            + (editing.Points[closest] - editing.Points[next]).normalized).normalized;
-                        // Calculate the angle from the normal and the (mouse - closest)
-                        var angleToNormal = Vector3.Cross((map.GeoMousePosition - editing.Points[closest]).normalized.ToVector3(), closestNormal.ToVector3());
-                        Debug.Log(angleToNormal);
-                        if(angleToNormal.z > 0)
+                        if (editing.Points.Count <= 1)
                         {
-                            // We insert at the closest
-                            //editing.Points.Insert(closest, map.GeoMousePosition);
+                            editing.Points.Add(map.GeoMousePosition);
                         }
                         else
                         {
-                            // We insert at the next
-                            //editing.Points.Insert(next, map.GeoMousePosition);
+                            // Find the closest index
+                            var min = editing.Points.Min(p => (p - map.GeoMousePosition).magnitude);
+                            var closest = editing.Points.FindIndex(p => (p - map.GeoMousePosition).magnitude == min);
+                            
+                            // Fix the previous and next
+                            var prev = closest == 0 ? editing.Points.Count - 1 : closest - 1;
+                            var next = (closest + 1) % editing.Points.Count;
+                            // Calculate the normal to both adjacent axis to closest point
+                            var c = editing.Points[closest];
+                            var v1 = (editing.Points[closest] - editing.Points[prev]).normalized;
+                            var v2 = (editing.Points[closest] - editing.Points[next]).normalized;
+
+                            var closestNormal = (v1 + v2).normalized;
+                            var convex = Vector3.Cross(v1.ToVector2(), v2.ToVector2()).z > 0;
+
+                            var mouseVector = (map.GeoMousePosition - c);
+                            var left = Vector3.Cross(closestNormal.ToVector2(), mouseVector.ToVector2()).z > 0;
+
+                            Debug.Log(convex ? "Convex" : "Concave");
+                            if ((left && convex) || (!left && !convex))
+                            {
+                                Debug.Log("Prev");
+                                // We insert at the closest
+                                editing.Points.Insert(closest, map.GeoMousePosition);
+                            }
+                            else
+                            {
+                                Debug.Log("Next");
+                                // We insert at the next
+                                editing.Points.Insert(next, map.GeoMousePosition);
+                            }
                         }
                         break;
                 }
