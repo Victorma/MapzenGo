@@ -17,14 +17,30 @@ public class GUIMap
 
     // Attributes
     public RepaintDelegate Repaint;
-    public int Zoom { get { return zoom; } set { zoom = Mathf.Clamp(value, 0, 19); } }
+    public int Zoom { get { return zoom; }
+        set
+        {
+            zoom = Mathf.Clamp(value, 0, 19);
+            centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), zoom);
+        }
+    }
     public List<GMLGeometry> Geometries { get; set; }
     public GMLGeometry selectedGeometry;
     public double SelectPointDistance { get; set; }
-    public Vector2d Center { get; set; }
+    public Vector2d Center { get { return center; }
+        set
+        {
+            center = value;
+            centerPixel = GM.MetersToPixels(GM.LatLonToMeters(center.y, center.x), Zoom);
+        }
+    }
+    public Vector2d GeoMousePosition { get; set; }
 
     // private attributes
     protected int zoom = 0;
+    protected Vector2d center;
+    protected Vector2d centerPixel;
+    private Vector2d PATR; // Will be calculated in the begining of each iteration
 
     /* -----------------------------
      * Constructor
@@ -42,8 +58,12 @@ public class GUIMap
 
     public bool DrawMap(Rect area)
     {
+        // update the pixel absolute to relative convert variable
+        PATR = -(centerPixel - (area.size / 2f).ToVector2d() - area.position.ToVector2d());
+
         var mousePos = Event.current.mousePosition.ToVector2d();
         var delta = new Vector2d(Event.current.delta.x, Event.current.delta.y);
+        GeoMousePosition = GM.MetersToLatLon(GM.PixelsToMeters(RelativeToAbsolute(mousePos), Zoom));
 
         switch (Event.current.type)
         {
@@ -71,13 +91,12 @@ public class GUIMap
                     // MoveLatLon or center var 
                     if (area.Contains(Event.current.mousePosition))
                     {
-                        var centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), Zoom);
                         if (selectedGeometry != null)
                         {
                             var pixels = LatLonToPixels(selectedGeometry.Points);
 
                             // Find the closest point
-                            var point = PixelsToRelative(pixels, centerPixel, area)
+                            var point = PixelsToRelative(pixels)
                                 .FindIndex(p => (p - mousePos).magnitude < SelectPointDistance);
                             // If there's a point, move the point
                             if(point != -1) pixels[point] += delta;
@@ -95,16 +114,20 @@ public class GUIMap
                 break;
             case EventType.mouseDown:
                 {
-                    var centerPixel = GM.MetersToPixels(GM.LatLonToMeters(Center.y, Center.x), Zoom);
                     selectedGeometry = Geometries.Find(g =>
                     {
-                        List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points), centerPixel, area)
+                        List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points))
                             .ConvertAll(p => p - Event.current.mousePosition.ToVector2d());
                         
                         return Inside(mousePos, points) || points.Any(p => p.magnitude < SelectPointDistance); 
                     });
 
-                    return true;
+                    if (area.Contains(Event.current.mousePosition))
+                    {
+                        GUI.FocusControl(null);
+                        return true;
+                    }
+
                 }
                 break;
         }
@@ -120,15 +143,10 @@ public class GUIMap
     protected void DrawTiles(Rect area)
     {
         // Download and draw tiles
-        var v2 = GM.LatLonToMeters(Center.y, Center.x);
-        var tile = GM.MetersToTile(v2, Zoom);
-        var centerPixel = GM.MetersToPixels(v2, Zoom);
+        var tile = GM.MetersToTile(GM.LatLonToMeters(Center.y, Center.x), Zoom);
 
         Vector2d topLeftCorner = GM.PixelsToTile(centerPixel - new Vector2d(area.width / 2f, area.height / 2f)),
             bottomRightCorner = GM.PixelsToTile(centerPixel + new Vector2d(area.width / 2f, area.height / 2f));
-
-        // pixel absolute to relative adition
-        Vector2 patr = -(centerPixel.ToVector2() - (area.size / 2f) - area.position);
 
         for (double x = topLeftCorner.x; x <= bottomRightCorner.x; x++)
         {
@@ -140,7 +158,7 @@ public class GUIMap
                     GM.MetersToPixels(tileBounds.Min, Zoom).ToVector2(),
                     GM.MetersToPixels(tileBounds.Min + tileBounds.Size, Zoom).ToVector2());
 
-                var windowRect = new Rect(tileRect.position + patr, tileRect.size);
+                var windowRect = new Rect(tileRect.position + PATR.ToVector2(), tileRect.size);
                 var areaRect = windowRect.Intersection(area);
                 if (areaRect.width < 0 || areaRect.height < 0)
                     continue;
@@ -152,17 +170,10 @@ public class GUIMap
 
     protected void DrawGeometries(Rect area)
     {        
-        // Download and draw tiles
-        var v2 = GM.LatLonToMeters(Center.y, Center.x);
-        var tile = GM.MetersToTile(v2, Zoom);
-        var centerPixel = GM.MetersToPixels(v2, Zoom);
-
-
-
         foreach(var g in Geometries)
         {
             // Convert from lat lon to pixel relative to the rect
-            List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points), centerPixel, area);
+            List<Vector2d> points = PixelsToRelative(LatLonToPixels(g.Points));
             if (points.Count == 0)
                 continue;
 
@@ -232,11 +243,19 @@ public class GUIMap
         return points.ConvertAll(p => GM.MetersToLatLon(GM.PixelsToMeters(p, Zoom)));
     }
 
-    private List<Vector2d> PixelsToRelative(List<Vector2d> pixels, Vector2d center, Rect area)
+    private Vector2d PixelToRelative(Vector2d pixel)
     {
-        // pixel absolute to relative adition
-        Vector2d patr = -(center - (area.size / 2f).ToVector2d() - area.position.ToVector2d());
-        return pixels.ConvertAll(p => p + patr);
+        return pixel + PATR;
+    }
+
+    private Vector2d RelativeToAbsolute(Vector2d pixel)
+    {
+        return pixel - PATR;
+    }
+
+    private List<Vector2d> PixelsToRelative(List<Vector2d> pixels)
+    {
+        return pixels.ConvertAll(p => PixelToRelative(p));
     }
 
     private bool Inside(Vector2d pixel, List<Vector2d> polygon)

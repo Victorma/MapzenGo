@@ -45,6 +45,7 @@ public class MapWindow : EditorWindow {
     private string lastSearch = "";
     private float timeSinceLastWrite;
     private List<GMLGeometry> geometries;
+    private GMLGeometry editing;
 
     /* ----------------------------------
      * GUI ELEMENTS
@@ -113,8 +114,45 @@ public class MapWindow : EditorWindow {
         geometriesReorderableList.DoList(rect);
 
         // Map drawing
-        map.DrawMap(GUILayoutUtility.GetRect(position.width - geometriesWidth, position.height - lastRect.y - lastRect.height));
+        map.selectedGeometry = geometriesReorderableList.index >= 0 ? geometries[geometriesReorderableList.index] : null;
+        if(map.DrawMap(GUILayoutUtility.GetRect(position.width - geometriesWidth, position.height - lastRect.y - lastRect.height)))
+        {
+            Debug.Log(map.GeoMousePosition);
+            if (editing != null)
+            {
+                switch (editing.Type)
+                {
+                    case GMLGeometry.GeometryType.Polygon:
+                        // Find the closest index
+                        var min = editing.Points.Min(p => (p - map.GeoMousePosition).magnitude);
+                        var closest = editing.Points.FindIndex(p => (p - map.GeoMousePosition).magnitude == min);
+                        // Fix the previous and next
+                        var prev = closest == 0 ? editing.Points.Count - 1 : closest - 1;
+                        var next = (closest + 1) % editing.Points.Count;
+                        // Calculate the normal to both adjacent axis to closest point
+                        var closestNormal = ((editing.Points[closest] - editing.Points[prev]).normalized
+                            + (editing.Points[closest] - editing.Points[next]).normalized).normalized;
+                        // Calculate the angle from the normal and the (mouse - closest)
+                        var angleToNormal = Vector3.Cross((map.GeoMousePosition - editing.Points[closest]).normalized.ToVector3(), closestNormal.ToVector3());
+                        Debug.Log(angleToNormal);
+                        if(angleToNormal.z > 0)
+                        {
+                            // We insert at the closest
+                            //editing.Points.Insert(closest, map.GeoMousePosition);
+                        }
+                        else
+                        {
+                            // We insert at the next
+                            //editing.Points.Insert(next, map.GeoMousePosition);
+                        }
+                        break;
+                }
+            }
+        }
+        
+
         location = map.Center.ToVector2();
+        geometriesReorderableList.index = map.selectedGeometry != null ? geometries.IndexOf(map.selectedGeometry) : -1;
 
         GUILayout.EndHorizontal();
 
@@ -215,9 +253,9 @@ public class MapWindow : EditorWindow {
             map.Center = location.ToVector2d();
         }
 
-        if(GUI.Button(editButtonRect.GUIAdapt(rect), "Edit"))
+        if(GUI.Button(editButtonRect.GUIAdapt(rect), editing != geo ? "Edit" : "Finish"))
         {
-            // TODO set editing this
+            editing =  editing == geo ? null : geo;
         }
     }
 
